@@ -47,10 +47,10 @@ Note: `scikit-learn` is no longer required in `requirements.txt`. The applicatio
 ### Option A: Simple Run (Windows, Mac, Linux)
 
 ```bash
-python -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+ python -m streamlit run app.py --server.port 8501 --server.address 127.0.0.1
 ```
 
-The app will be available at `http://localhost:8501`.
+The app will be available at `http://127.0.0.1:8501`.
 
 ### Option B: If Browser Does Not Open Automatically
 
