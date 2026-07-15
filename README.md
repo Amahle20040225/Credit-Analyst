@@ -1,208 +1,172 @@
-# model_engine.py
-"""
-Robust model engine with a pure-Python fallback so the app can run even when
-`scikit-learn` is not available or fails to build on the target machine.
-"""
+# FNB DataQuest 2026: Interpretable Credit Modeling Console
 
-from typing import Tuple
-import numpy as np
+A Streamlit-based interactive credit risk modeling application for analyzing and predicting credit risk using machine learning.
 
-HAS_SKLEARN = True
-try:
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.metrics import roc_auc_score, roc_curve
-except Exception:
-    HAS_SKLEARN = False
+## Prerequisites
 
+- **Python 3.11 (recommended)** installed on your system — or use a Conda environment (preferred on Windows)
+- **pip** package manager (use `python -m pip` to ensure the correct interpreter)
 
-if not HAS_SKLEARN:
-    # Minimal StandardScaler fallback
-    class StandardScaler:
-        def __init__(self):
-            self.mean_ = None
-            self.scale_ = None
+## Installation
 
-        def fit(self, X: np.ndarray):
-            self.mean_ = np.mean(X, axis=0)
-            self.scale_ = np.std(X, axis=0)
-            self.scale_[self.scale_ == 0] = 1.0
-            return self
+### 1. Clone or Download the Repository
 
-        def transform(self, X: np.ndarray) -> np.ndarray:
-            return (X - self.mean_) / self.scale_
+```bash
+cd fnb_dataquests
+```
 
-        def fit_transform(self, X: np.ndarray) -> np.ndarray:
-            return self.fit(X).transform(X)
+### 2. Create and Activate a Python Virtual Environment (Recommended)
 
-    # Simple logistic regression using gradient descent
-    class LogisticRegression:
-        def __init__(self, max_iter=1000, random_state=42, C=1.0):
-            self.max_iter = max_iter
-            self.random_state = random_state
-            self.C = C
-            self.coef_ = None
-            self.intercept_ = 0.0
+Windows:
 
-        def _sigmoid(self, z: np.ndarray) -> np.ndarray:
-            return 1.0 / (1.0 + np.exp(-np.clip(z, -50, 50)))
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
 
-        def fit(self, X: np.ndarray, y: np.ndarray):
-            rng = np.random.RandomState(self.random_state)
-            n_samples, n_features = X.shape
-            X_b = np.hstack([np.ones((n_samples, 1)), X])
-            w = np.zeros(n_features + 1)
+macOS / Linux:
 
-            lr = 0.1
-            reg = 1.0 / max(self.C, 1e-12)
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
 
-            for _ in range(self.max_iter):
-                preds = self._sigmoid(X_b.dot(w))
-                error = preds - y
-                grad = (X_b.T.dot(error)) / n_samples
-                # L2 regularization (skip bias term)
-                grad[1:] += reg * w[1:]
-                w -= lr * grad
+### 3. Install Dependencies
 
-            self.intercept_ = w[0]
-            self.coef_ = w[1:][np.newaxis, :]
-            return self
+```bash
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+```
 
-        def predict_proba(self, X: np.ndarray) -> np.ndarray:
-            if X.ndim == 1:
-                X = X.reshape(1, -1)
-            z = X.dot(self.coef_.T).ravel() + self.intercept_
-            probs_pos = self._sigmoid(z)
-            probs_neg = 1.0 - probs_pos
-            return np.vstack([probs_neg, probs_pos]).T
+> Use `python -m pip` so that dependencies install into the exact Python interpreter you will use to run the app.
 
-    def roc_auc_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
-        # Fast implementation using the Mann-Whitney U statistic
-        y_true = np.asarray(y_true)
-        y_score = np.asarray(y_score)
-        pos = y_score[y_true == 1]
-        neg = y_score[y_true == 0]
-        if pos.size == 0 or neg.size == 0:
-            return 0.5
-        # compute ranks
-        combined = np.concatenate([pos, neg])
-        ranks = np.argsort(np.argsort(combined)) + 1
-        # sum of ranks for positives
-        rank_pos = np.sum(ranks[: pos.size])
-        u = rank_pos - (pos.size * (pos.size + 1)) / 2.0
-        auc = u / (pos.size * neg.size)
-        return float(auc)
+Note: `scikit-learn` is no longer required in `requirements.txt`. The application provides a pure-Python fallback logistic engine when `scikit-learn` is not installed. If you want the faster, production-ready `scikit-learn` implementation, install it separately (Conda recommended on Windows).
 
-    def roc_curve(y_true: np.ndarray, y_score: np.ndarray):
-        # Simple ROC points computation
-        y_true = np.asarray(y_true)
-        y_score = np.asarray(y_score)
-        desc_score_indices = np.argsort(-y_score)
-        y_true = y_true[desc_score_indices]
-        distinct_value_indices = np.where(np.diff(y_score[desc_score_indices]))[0]
-        threshold_idxs = np.r_[distinct_value_indices, y_true.size - 1]
-        tps = np.cumsum(y_true == 1)[threshold_idxs]
-        fps = 1 + threshold_idxs - tps
-        tps = tps.astype(float)
-        fps = fps.astype(float)
-        fn = np.sum(y_true == 1) - tps
-        tn = np.sum(y_true == 0) - fps
-        tpr = tps / (tps + fn)
-        fpr = fps / (fps + tn)
-        thresholds = y_score[desc_score_indices][threshold_idxs]
-        return fpr, tpr, thresholds
+## Running the Application
 
+### Option A: Simple Run (Windows, Mac, Linux)
 
-class CreditRiskModelEngine:
+```bash
+python -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+```
 
-    def __init__(self, target_features: list):
+The app will be available at `http://localhost:8501`.
 
-        self.features = target_features
+### Option B: If Browser Does Not Open Automatically
 
-        self.scaler = StandardScaler()
+Open your browser manually and go to:
 
-        # logistic model (sklearn or fallback)
-        self.model = LogisticRegression(
-            max_iter=1000,
-            random_state=42
-        )
+```bash
+http://localhost:8501
+```
 
-        self.test_auc_score = 0.0
+### Option C: Use a Fixed Port and Network Access
 
-        self.fpr = None
-        self.tpr = None
+```bash
+python -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+```
 
-    def execute_training_pipeline(self, clean_df) -> Tuple:
+If you want to bind only to the local machine, change `0.0.0.0` to `127.0.0.1`.
 
-        # -----------------------------------------
-        # TRAIN / TEST SPLIT
-        # -----------------------------------------
+### Option B: Direct Python Execution
 
-        train_matrix = (
-            clean_df[clean_df['set'] == 'train']
-        )
+```bash
+python -m streamlit run app.py
+```
 
-        test_matrix = (
-            clean_df[clean_df['set'] == 'test']
-        )
+### Option C: Windows (if streamlit not in PATH)
 
-        # -----------------------------------------
-        # FEATURE ARRAYS
-        # -----------------------------------------
+If you get a "streamlit not found" error, use the full Python path:
 
-        X_train = train_matrix[self.features]
-        y_train = train_matrix['default_flag']
+```powershell
+# On Windows (replace with your Python path if different)
+python -m streamlit run app.py
+```
 
-        X_test = test_matrix[self.features]
-        y_test = test_matrix['default_flag']
+## Features
 
-        # Convert to numpy for fallback implementations
-        X_train_np = X_train.values if hasattr(X_train, 'values') else np.asarray(X_train)
-        X_test_np = X_test.values if hasattr(X_test, 'values') else np.asarray(X_test)
-        y_train_np = y_train.values if hasattr(y_train, 'values') else np.asarray(y_train)
-        y_test_np = y_test.values if hasattr(y_test, 'values') else np.asarray(y_test)
+- **� Interface 0:** Credit Risk Performance
+- **📊 Interface 1:** Customer Risk Insight
+- **🔄 Interface 2:** Risk Score Analysis
+- **🎯 Interface 3:** Risk Prediction & Strategy Optimization
 
-        # -----------------------------------------
-        # SCALE FEATURES
-        # -----------------------------------------
+## Project Structure
 
-        X_train_scaled = self.scaler.fit_transform(X_train_np)
-        X_test_scaled = self.scaler.transform(X_test_np)
+```
+fnb_dataquests/
+├── app.py                 # Main Streamlit application
+├── data_utils.py          # Data processing & cleaning utilities
+├── model_engine.py        # Credit risk model engine
+├── loan_book.csv          # Dataset (3 years historical data)
+├── requirements.txt       # Python dependencies
+└── README.md             # This file
+```
 
-        # -----------------------------------------
-        # MODEL TRAINING
-        # -----------------------------------------
+## Data
 
-        self.model.fit(X_train_scaled, y_train_np)
+The application uses `loan_book.csv` containing 3 years of historical loan application data with features including:
+- Applicant demographics (age, income, employment length)
+- Credit history (delinquencies, inquiries, account age)
+- Loan characteristics (amount, type, purpose)
+- Risk indicators (DTI ratio, credit utilization)
 
-        # -----------------------------------------
-        # PREDICTIONS
-        # -----------------------------------------
+## Troubleshooting
 
-        predicted_probabilities = self.model.predict_proba(X_test_scaled)[:, 1]
+### Port Already in Use
 
-        # -----------------------------------------
-        # AUC SCORE
-        # -----------------------------------------
+If port 8501 is already in use:
 
-        self.test_auc_score = float(
-            roc_auc_score(
-                y_test_np,
-                predicted_probabilities
-            )
-        )
+```bash
+streamlit run app.py --server.port 8502
+```
 
-        # -----------------------------------------
-        # ROC CURVE
-        # -----------------------------------------
+### Module Import Errors & scikit-learn build failures (Windows)
 
-        self.fpr, self.tpr, _ = roc_curve(
-            y_test_np,
-            predicted_probabilities
-        )
+Symptom: installing `scikit-learn` from source fails with long compiler output (Meson / MSVC / ninja). This commonly happens when the Python version on the target machine does not have a prebuilt wheel available (for example, newer Python 3.14 wheels may be missing) and pip attempts to compile C/C++ extensions.
 
-        return (
-            X_test,
-            y_test,
-            predicted_probabilities
-        )
+Recommended fixes (choose one):
+
+- Easiest — use Conda (Windows):
+
+```powershell
+conda create -n fnb_py311 python=3.11 -y
+conda activate fnb_py311
+conda install -c conda-forge scikit-learn=1.3 streamlit pandas numpy matplotlib seaborn -y
+python -m pip install -r requirements.txt --no-deps
+```
+
+- Or use a Python 3.11 virtualenv and pip (cross-platform):
+
+```powershell
+# check python version
+python --version
+
+# create venv and activate (Windows PowerShell)
+python -m venv .venv
+.\.venv\\Scripts\\Activate.ps1
+
+# upgrade pip build tooling and install
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+```
+
+- If you must keep Python >= 3.12/3.14 and pip tries to compile scikit-learn, either:
+	- install the Microsoft C++ Build Tools / Visual Studio components and Ninja (slow and error-prone), or
+	- install scikit-learn from conda-forge (recommended) because it provides prebuilt binaries for many Python versions.
+
+Notes:
+- Using `python -m pip` ensures packages are installed into the same interpreter used to run Streamlit.
+- Prefer Conda on Windows because it provides prebuilt native wheels and avoids complex compiler toolchains.
+
+### CSV File Not Found
+
+Ensure `loan_book.csv` is in the same directory as `app.py`
+
+## Author
+
+**Mivuyo Xinindlu** - NMU Final Year (2026)
+**Amahle Mbenguzna** - NMU IT GRADUATE (2026)
+
+## License
+
+MIT License - Please dont use and modify without authority.
