@@ -1,0 +1,87 @@
+# data_utils.py
+"""
+DATA PROCESSING & FEATURE ENGINEERING MODULE.
+HANDLES INGESTION, IMPUTATION, AND DUPLICATE COUNT EXTRACTION.
+"""
+
+import pandas as pd
+import numpy as np
+
+
+def calculate_column_mean(series: pd.Series) -> float:
+    """
+    MANUAL ARITHMETIC MEAN CALCULATOR BASED ON FIRST PRINCIPLES.
+    USES AN ACCUMULATOR AND COUNTER PATTERN.
+    """
+    total_sum = 0.0
+    valid_count = 0
+
+    for value in series:
+        if pd.notnull(value):
+            total_sum += value        # ACCUMULATOR PATTERN
+            valid_count += 1          # COUNTER PATTERN
+
+    if valid_count == 0:
+        return 0.0
+
+    return total_sum / valid_count
+
+
+def process_and_clean_book(filepath='loan_book.csv'):
+    """
+    MAIN PREPROCESSING PIPELINE INFRASTRUCTURE GATEWAY.
+    RETURNS BOTH THE OPERATIONAL DATAFRAME AND THE EXTRACTED DUPLICATE COUNT.
+    """
+    df = pd.read_csv(filepath)
+
+    # ---------------------------------------------------
+    # TEXT NORMALIZATION & TEXT CASING CLEANUP
+    # ---------------------------------------------------
+    text_columns = ['home_ownership', 'region', 'loan_purpose', 'email_domain_type']
+    for col in text_columns:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.lower().str.strip()
+
+    # ---------------------------------------------------
+    # DUPLICATE RECORD IDENTIFICATION LOGFLOW
+    # ---------------------------------------------------
+    duplicate_count = int(df['applicant_id_hash'].duplicated().sum())
+
+    # ---------------------------------------------------
+    # STRATEGIC MISSING VALUE BALANCING & CEILING TRAPS
+    # ---------------------------------------------------
+    mean_income = calculate_column_mean(df['annual_income'])
+    df['annual_income'] = df['annual_income'].fillna(mean_income)
+
+    mean_employment = calculate_column_mean(df['employment_length_years'])
+    df['employment_length_years'] = df['employment_length_years'].fillna(mean_employment)
+
+    mean_accounts = calculate_column_mean(df['num_open_accounts'])
+    df['num_open_accounts'] = df['num_open_accounts'].fillna(mean_accounts)
+
+    # STRATEGIC MISSINGNESS IMPUTATION BOUNDARY FOR REPAYMENT MARKS
+    df['months_since_last_delinquency'] = df['months_since_last_delinquency'].fillna(999.0)
+
+    # 🚨 FIXING THE AGE OUTLIER TRAP FOUND VIA HUMAN EYE-DEBUGGING
+    # IF RAW SIMULATED DATA OVERFLOWS THE LEGAL LIMIT, REPLACE IT WITH THE DATASET MEDIAN
+    df['age'] = np.where(df['age'] > 100, df['age'].median(), df['age'])
+
+    # ---------------------------------------------------
+    # DOMAIN-INFORMED ADVANCED FEATURE ENGINEERING FABRIC
+    # ---------------------------------------------------
+    df['loan_to_income_ratio'] = df['loan_amount'] / (df['annual_income'] + 1.0)
+    df['revolving_to_income_ratio'] = df['total_revolving_balance'] / (df['annual_income'] + 1.0)
+    df['credit_stress_index'] = df['credit_utilisation_pct'] * (df['num_hard_inquiries_6mo'] + 1.0)
+
+    df['region_rent_flag'] = np.where(
+        ((df['home_ownership'] == 'rent') & (df['region'].str.contains('urban', na=False))), 1, 0
+    )
+
+    # ---------------------------------------------------
+    # TARGET LEAKAGE DESTRUCTION GATEWAY
+    # ---------------------------------------------------
+    leakage_columns = ['applicant_id_hash', 'interest_rate', 'application_date', 'application_dow']
+    df_clean = df.drop(columns=[col for col in leakage_columns if col in df.columns])
+
+    # RETURN BOTH VALUES AS A TUPLE PACK TO PREVENT CROSS-MODULE RECURSION
+    return df_clean, duplicate_count

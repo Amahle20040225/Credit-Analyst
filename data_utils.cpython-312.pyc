@@ -1,0 +1,28 @@
+#!/bin/bash
+# FNB DataQuest 2026 - Run Script (macOS/Linux)
+
+echo "🇿🇦 FNB DataQuest 2026: Credit Risk Modeling Console"
+echo "============================================================"
+echo ""
+
+# Check if Python is available
+if ! command -v python3 &> /dev/null; then
+    echo "✗ Python 3 not found. Please install Python 3.12+"
+    exit 1
+fi
+
+python_version=$(python3 --version 2>&1)
+echo "✓ Python found: $python_version"
+echo ""
+
+echo "📦 Installing dependencies from requirements.txt..."
+python3 -m pip install --upgrade pip setuptools wheel
+python3 -m pip install -r requirements.txt
+
+echo ""
+echo "🚀 Starting Streamlit application..."
+echo "📱 Open your browser at: http://localhost:8501"
+echo "Press Ctrl+C to stop the server"
+echo ""
+
+python3 -m streamlit run app.py --server.port 8501 --server.address 0.0.0.0
